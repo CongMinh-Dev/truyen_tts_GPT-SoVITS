@@ -73,10 +73,15 @@ if os.path.exists(txt_path) == False:
             inputs = tokenizer(text, return_tensors="pt")
             for i in inputs:
                 inputs[i] = inputs[i].to(device)
-            res = bert_model(**inputs, output_hidden_states=False)
-            res = res[0][0].cpu()[1:-1]
+            
+            # 1. Bật output_hidden_states=True để lấy các lớp vector ẩn
+            outputs = bert_model(**inputs, output_hidden_states=True)
+            
+            # 2. Lấy lớp ẩn cuối cùng (last_hidden_state) thay vì lấy res[0]
+            # outputs.hidden_states là một tuple chứa tất cả các lớp, [-1] là lớp cuối
+            res = outputs.hidden_states[-1][0].cpu()[1:-1]
         
-        # Logic fix cho tiếng Việt: nội suy để khớp độ dài
+        # Giữ nguyên phần logic nội suy bên dưới của bạn
         if len(res) != len(word2ph):
             res = torch.nn.functional.interpolate(
                 res.unsqueeze(0).transpose(1, 2), 
@@ -87,6 +92,7 @@ if os.path.exists(txt_path) == False:
             
         phone_level_feature = []
         for i in range(len(word2ph)):
+            # Lúc này res[i] sẽ có size 768 thay vì 64001
             repeat_feature = res[i].repeat(word2ph[i], 1)
             phone_level_feature.append(repeat_feature)
         phone_level_feature = torch.cat(phone_level_feature, dim=0)

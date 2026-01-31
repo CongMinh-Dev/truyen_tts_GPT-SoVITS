@@ -698,21 +698,33 @@ def open1Bb(
                     "lr": 0.01,
                     "lr_end": 0.0001,
                     "warmup_steps": 100,
-                    "total_steps": 32000
+                    "decay_steps": 32000,
+                },
+                "data": {
+                    "num_workers": 2,
+                    "pin_memory": True,
+                    "max_sec": 54,
+                    "pad_val": 1024,
+                    "pad_token": 1024
                 },
                 "model": {
-                    "hidden_dim": 512,      # Giảm từ 1024 xuống 512
-                    "embedding_dim": 512,   # Giảm từ 1024 xuống 512
-                    "head": 8,              # Giảm từ 16 xuống 8
-                    "n_layer": 12,          # Giảm từ 24 xuống 12
-                    "p_dropout": 0.0,
+                    "hidden_dim": 512,
+                    "embedding_dim": 512,
+                    "n_layer": 24,
+                    "head": 8,
+                    "vocab_size": 1025,
+                    "phoneme_vocab_size": 732,
                     "dropout": 0.0,
-                    "vocab_size": 1025,     # Tăng lên 1025 theo chuẩn v2 thường
-                    "phoneme_vocab_size": 512,
-                    "top_k": 3,
+                    "EOS": 1024,
                     "max_sec": 54,
-                    "EOS": 1024             # Phải bằng vocab_size - 1 (1025 - 1 = 1024)
-                }
+                    "pad_token": 1024,
+                    "bert_n_layers": 24,         # Sửa từ 24 thành 12
+                    "bert_hidden_size": 1024,     # Sửa từ 1024 thành 768 (QUAN TRỌNG)
+                    "prompt_bert_hidden_size": 1024, # Sửa thành 768
+                    "train_bert_units": 1024,     # Sửa thành 768
+                    "train_bert": False,
+                    "logit_temp": 1.0
+                },
             }
         # ----------------------------------------------
 

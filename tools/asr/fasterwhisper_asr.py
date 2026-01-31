@@ -114,6 +114,30 @@ def execute_asr(input_folder, output_folder, model_path, language, precision):
     output = []
     output_file_name = os.path.basename(input_folder)
 
+    # for file_name in tqdm(input_file_names):
+    #     try:
+    #         file_path = os.path.join(input_folder, file_name)
+    #         segments, info = model.transcribe(
+    #             audio=file_path,
+    #             beam_size=5,
+    #             vad_filter=True,
+    #             vad_parameters=dict(min_silence_duration_ms=700),
+    #             language=language,
+    #         )
+    #         text = ""
+
+    #         if info.language in ["zh", "yue"]:
+    #             print("检测为中文文本, 转 FunASR 处理")
+    #             text = only_asr(file_path, language=info.language.lower())
+
+    #         if text == "":
+    #             for segment in segments:
+    #                 text += segment.text
+    #         output.append(f"{file_path}|{output_file_name}|{info.language.upper()}|{text}")
+    #     except Exception as e:
+    #         print(e)
+    #         traceback.print_exc()
+
     for file_name in tqdm(input_file_names):
         try:
             file_path = os.path.join(input_folder, file_name)
@@ -126,16 +150,32 @@ def execute_asr(input_folder, output_folder, model_path, language, precision):
             )
             text = ""
 
+            # 1. Kiểm tra ngôn ngữ ngay lập tức
+            # info.language là ngôn ngữ Whisper tự nhận diện hoặc do mình chỉ định
+            if info.language != "vi":
+                print(f"-> Bỏ qua {file_name}: Ngôn ngữ không phải tiếng Việt ({info.language})")
+                continue
+
+            # Đoạn code xử lý tiếng Trung (FunASR) của gốc giữ lại hoặc bỏ qua tùy bạn 
+            # vì ta đã lọc 'vi' ở trên nên đoạn này sẽ không bao giờ chạy tới nếu là vi
             if info.language in ["zh", "yue"]:
-                print("检测为中文文本, 转 FunASR 处理")
                 text = only_asr(file_path, language=info.language.lower())
 
             if text == "":
                 for segment in segments:
                     text += segment.text
+            
+            # 2. Kiểm tra nội dung văn bản (Loại bỏ dòng trống hoặc chỉ có khoảng trắng)
+            text = text.strip()
+            if text == "":
+                print(f"-> Bỏ qua {file_name}: Không nhận diện được chữ (văn bản rỗng)")
+                continue
+
+            # Nếu vượt qua tất cả các bộ lọc thì mới thêm vào output
             output.append(f"{file_path}|{output_file_name}|{info.language.upper()}|{text}")
+
         except Exception as e:
-            print(e)
+            print(f"Lỗi khi xử lý file {file_name}: {e}")
             traceback.print_exc()
 
     output_folder = output_folder or "output/asr_opt"
