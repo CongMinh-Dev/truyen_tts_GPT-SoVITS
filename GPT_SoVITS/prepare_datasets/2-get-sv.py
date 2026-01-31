@@ -18,12 +18,14 @@ import torch
 is_half = eval(os.environ.get("is_half", "True")) and torch.cuda.is_available()
 
 import traceback
-import torchaudio
+# import torchaudio
 
 now_dir = os.getcwd()
 sys.path.append(now_dir)
 sys.path.append(f"{now_dir}/GPT_SoVITS/eres2net")
-from tools.my_utils import clean_path
+from tools.my_utils import clean_path, load_audio
+import librosa
+import numpy as np
 from time import time as ttime
 import shutil
 from ERes2NetV2 import ERes2NetV2
@@ -62,7 +64,8 @@ class SV:
         embedding_model.load_state_dict(pretrained_state)
         embedding_model.eval()
         self.embedding_model = embedding_model
-        self.res = torchaudio.transforms.Resample(32000, 16000).to(device)
+        # self.res = torchaudio.transforms.Resample(32000, 16000).to(device)
+        self.res = None
         if is_half == False:
             self.embedding_model = self.embedding_model.to(device)
         else:
@@ -71,7 +74,10 @@ class SV:
 
     def compute_embedding3(self, wav):  # (1,x)#-1~1
         with torch.no_grad():
-            wav = self.res(wav)
+            # wav = self.res(wav)
+            wav_np = wav.cpu().numpy() 
+            wav_16k = librosa.resample(wav_np, orig_sr=32000, target_sr=16000)
+            wav = torch.from_numpy(wav_16k).to(device)
             if self.is_half == True:
                 wav = wav.half()
             feat = torch.stack(
@@ -89,7 +95,11 @@ def name2go(wav_name, wav_path):
     if os.path.exists(sv_cn_path):
         return
     wav_path = "%s/%s" % (wav32dir, wav_name)
-    wav32k, sr0 = torchaudio.load(wav_path)
+    # wav32k, sr0 = torchaudio.load(wav_path)
+    wav32k_np = load_audio(wav_path, 32000) 
+    wav32k = torch.from_numpy(wav32k_np).unsqueeze(0) # Đưa về dạng (1, n)
+    sr0 = 32000
+
     assert sr0 == 32000
     wav32k = wav32k.to(device)
     emb = sv.compute_embedding3(wav32k).cpu()  # torch.Size([1, 20480])

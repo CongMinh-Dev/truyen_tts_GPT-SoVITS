@@ -13,29 +13,41 @@ from tools.i18n.i18n import I18nAuto
 i18n = I18nAuto(language=os.environ.get("language", "Auto"))
 
 
+# def load_audio(file, sr):
+#     try:
+#         # https://github.com/openai/whisper/blob/main/whisper/audio.py#L26
+#         # This launches a subprocess to decode audio while down-mixing and resampling as necessary.
+#         # Requires the ffmpeg CLI and `ffmpeg-python` package to be installed.
+#         file = clean_path(file)  # 防止小白拷路径头尾带了空格和"和回车
+#         if os.path.exists(file) is False:
+#             raise RuntimeError("You input a wrong audio path that does not exists, please fix it!")
+#         out, _ = (
+#             ffmpeg.input(file, threads=0)
+#             .output("-", format="f32le", acodec="pcm_f32le", ac=1, ar=sr)
+#             .run(cmd=["ffmpeg", "-nostdin"], capture_stdout=True, capture_stderr=True)
+#         )
+#     except Exception:
+#         out, _ = (
+#             ffmpeg.input(file, threads=0)
+#             .output("-", format="f32le", acodec="pcm_f32le", ac=1, ar=sr)
+#             .run(cmd=["ffmpeg", "-nostdin"], capture_stdout=True)
+#         )  # Expose the Error
+#         raise RuntimeError(i18n("音频加载失败"))
+
+#     return np.frombuffer(out, np.float32).flatten()
 def load_audio(file, sr):
+    import librosa
     try:
-        # https://github.com/openai/whisper/blob/main/whisper/audio.py#L26
-        # This launches a subprocess to decode audio while down-mixing and resampling as necessary.
-        # Requires the ffmpeg CLI and `ffmpeg-python` package to be installed.
-        file = clean_path(file)  # 防止小白拷路径头尾带了空格和"和回车
+        file = clean_path(file)
         if os.path.exists(file) is False:
             raise RuntimeError("You input a wrong audio path that does not exists, please fix it!")
-        out, _ = (
-            ffmpeg.input(file, threads=0)
-            .output("-", format="f32le", acodec="pcm_f32le", ac=1, ar=sr)
-            .run(cmd=["ffmpeg", "-nostdin"], capture_stdout=True, capture_stderr=True)
-        )
-    except Exception:
-        out, _ = (
-            ffmpeg.input(file, threads=0)
-            .output("-", format="f32le", acodec="pcm_f32le", ac=1, ar=sr)
-            .run(cmd=["ffmpeg", "-nostdin"], capture_stdout=True)
-        )  # Expose the Error
+        
+        # Dùng librosa thay cho ffmpeg để tránh lỗi GLIBCXX
+        data, _ = librosa.load(file, sr=sr)
+        return data
+    except Exception as e:
+        print(f"Error loading audio: {e}")
         raise RuntimeError(i18n("音频加载失败"))
-
-    return np.frombuffer(out, np.float32).flatten()
-
 
 def clean_path(path_str: str):
     if path_str.endswith(("\\", "/")):

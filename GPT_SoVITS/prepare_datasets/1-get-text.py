@@ -11,6 +11,7 @@ if "_CUDA_VISIBLE_DEVICES" in os.environ:
     os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["_CUDA_VISIBLE_DEVICES"]
 opt_dir = os.environ.get("opt_dir")
 bert_pretrained_dir = os.environ.get("bert_pretrained_dir")
+# bert_pretrained_dir = "/content/GPT-SoVITS/pretrained_models/phobert-base" # Đường dẫn PhoBERT bạn đã tải
 import torch
 
 is_half = eval(os.environ.get("is_half", "True")) and torch.cuda.is_available()
@@ -45,6 +46,7 @@ def my_save(fea, path):  #####fix issue: torch.save doesn't support chinese path
 
 txt_path = "%s/2-name2text-%s.txt" % (opt_dir, i_part)
 if os.path.exists(txt_path) == False:
+    os.makedirs(opt_dir, exist_ok=True)
     bert_dir = "%s/3-bert" % (opt_dir)
     os.makedirs(opt_dir, exist_ok=True)
     os.makedirs(bert_dir, exist_ok=True)
@@ -148,5 +150,12 @@ if os.path.exists(txt_path) == False:
     opt = []
     for name, phones, word2ph, norm_text in res:
         opt.append("%s\t%s\t%s\t%s" % (name, phones, word2ph, norm_text))
-    with open(txt_path, "w", encoding="utf8") as f:
-        f.write("\n".join(opt) + "\n")
+    if len(opt) > 0:
+        try:
+            with open(txt_path, "w", encoding="utf8") as f:
+                f.write("\n".join(opt) + "\n")
+            print(f"--- THANH CONG: Da tao file {txt_path} voi {len(opt)} dong ---")
+        except Exception as e:
+            print(f"--- LOI GHI FILE: {str(e)} ---")
+    else:
+        print("--- CANH BAO: Danh sach ket qua (opt) dang trong. Kiem tra lai duong dan file am thanh! ---")

@@ -128,7 +128,7 @@ def set_default():
     else:
         default_sovits_epoch = 2
         default_sovits_save_every_epoch = 1
-        max_sovits_epoch = 16  # 40 # 3 #训太多=作死
+        max_sovits_epoch = 16  # 40 # 3 #Training too much = risky
         max_sovits_save_every_epoch = 10  # 10 # 3
 
     default_batch_size = max(1, default_batch_size)
@@ -177,7 +177,7 @@ def check_pretrained_is_exist(version):
         if "s2Dv3" not in i and "s2Dv4" not in i and os.path.exists(i) == False:
             _ += f"\n    {i}"
     if _:
-        print("warning: ", i18n("以下模型不存在:") + _)
+        print("warning: ", i18n("The following models do not exist:") + _)
 
 
 check_pretrained_is_exist(version)
@@ -238,33 +238,33 @@ def kill_process(pid, process_name=""):
         subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
         kill_proc_tree(pid)
-    print(process_name + i18n("进程已终止"))
+    print(process_name + i18n("Tiến trình đã kết thúc"))
 
 
 def process_info(process_name="", indicator=""):
     if indicator == "opened":
-        return process_name + i18n("已开启")
+        return process_name + i18n("Opened")
     elif indicator == "open":
-        return i18n("开启") + process_name
+        return i18n("open") + process_name
     elif indicator == "closed":
-        return process_name + i18n("已关闭")
+        return process_name + i18n("closed")
     elif indicator == "close":
-        return i18n("关闭") + process_name
+        return i18n("close") + process_name
     elif indicator == "running":
-        return process_name + i18n("运行中")
+        return process_name + i18n("running")
     elif indicator == "occupy":
-        return process_name + i18n("占用中") + "," + i18n("需先终止才能开启下一次任务")
+        return process_name + i18n("Occupied") + "," + i18n("must terminate before next task")
     elif indicator == "finish":
-        return process_name + i18n("已完成")
+        return process_name + i18n("Finished")
     elif indicator == "failed":
-        return process_name + i18n("失败")
+        return process_name + i18n("failed")
     elif indicator == "info":
         return process_name + i18n("进程输出信息")
     else:
         return process_name
 
 
-process_name_subfix = i18n("音频标注WebUI")
+process_name_subfix = i18n("WebUI dán nhãn âm thanh")
 
 
 def change_label(path_list):
@@ -295,7 +295,7 @@ def change_label(path_list):
         )
 
 
-process_name_uvr5 = i18n("人声分离WebUI")
+process_name_uvr5 = i18n("WebUI tách lời bài hát")
 
 
 def change_uvr5():
@@ -325,7 +325,7 @@ def change_uvr5():
         )
 
 
-process_name_tts = i18n("TTS推理WebUI")
+process_name_tts = i18n("TTS Inference WebUI")
 
 
 def change_tts_inference(bert_path, cnhubert_base_path, gpu_number, gpt_path, sovits_path, batched_infer_enabled):
@@ -365,7 +365,7 @@ def change_tts_inference(bert_path, cnhubert_base_path, gpu_number, gpt_path, so
 
 from tools.asr.config import asr_dict
 
-process_name_asr = i18n("语音识别")
+process_name_asr = i18n("ASR (Speech Recognition)")
 
 
 def open_asr(asr_inp_dir, asr_opt_dir, asr_model, asr_model_size, asr_lang, asr_precision):
@@ -426,7 +426,7 @@ def close_asr():
     )
 
 
-process_name_denoise = i18n("语音降噪")
+process_name_denoise = i18n("Audio Denoising")
 
 
 def open_denoise(denoise_inp_dir, denoise_opt_dir):
@@ -483,7 +483,7 @@ def close_denoise():
 
 
 p_train_SoVITS = None
-process_name_sovits = i18n("SoVITS训练")
+process_name_sovits = i18n("SoVITS Training")
 
 
 def open1Ba(
@@ -584,8 +584,83 @@ def close1Ba():
 
 
 p_train_GPT = None
-process_name_gpt = i18n("GPT训练")
+process_name_gpt = i18n("GPT Training")
 
+
+# def open1Bb(
+#     batch_size,
+#     total_epoch,
+#     exp_name,
+#     if_dpo,
+#     if_save_latest,
+#     if_save_every_weights,
+#     save_every_epoch,
+#     gpu_numbers,
+#     pretrained_s1,
+# ):
+#     global p_train_GPT
+#     if p_train_GPT == None:
+#         exp_name = exp_name.rstrip(" ")
+#         with open(
+#             "GPT_SoVITS/configs/s1longer.yaml" if version == "v1" else "GPT_SoVITS/configs/s1longer-v2.yaml"
+#         ) as f:
+#             data = f.read()
+#             data = yaml.load(data, Loader=yaml.FullLoader)
+#         s1_dir = "%s/%s" % (exp_root, exp_name)
+#         os.makedirs("%s/logs_s1" % (s1_dir), exist_ok=True)
+#         if check_for_existance([s1_dir], is_train=True):
+#             check_details([s1_dir], is_train=True)
+#         if is_half == False:
+#             data["train"]["precision"] = "32"
+#             batch_size = max(1, batch_size // 2)
+#         data["train"]["batch_size"] = batch_size
+#         data["train"]["epochs"] = total_epoch
+#         data["pretrained_s1"] = pretrained_s1
+#         data["train"]["save_every_n_epoch"] = save_every_epoch
+#         data["train"]["if_save_every_weights"] = if_save_every_weights
+#         data["train"]["if_save_latest"] = if_save_latest
+#         data["train"]["if_dpo"] = if_dpo
+#         data["train"]["half_weights_save_dir"] = GPT_weight_version2root[version]
+#         data["train"]["exp_name"] = exp_name
+#         data["train_semantic_path"] = "%s/6-name2semantic.tsv" % s1_dir
+#         data["train_phoneme_path"] = "%s/2-name2text.txt" % s1_dir
+#         data["output_dir"] = "%s/logs_s1_%s" % (s1_dir, version)
+#         # data["version"]=version
+
+#         os.environ["_CUDA_VISIBLE_DEVICES"] = str(fix_gpu_numbers(gpu_numbers.replace("-", ",")))
+#         os.environ["hz"] = "25hz"
+#         tmp_config_path = "%s/tmp_s1.yaml" % tmp
+#         with open(tmp_config_path, "w") as f:
+#             f.write(yaml.dump(data, default_flow_style=False))
+#         # cmd = '"%s" GPT_SoVITS/s1_train.py --config_file "%s" --train_semantic_path "%s/6-name2semantic.tsv" --train_phoneme_path "%s/2-name2text.txt" --output_dir "%s/logs_s1"'%(python_exec,tmp_config_path,s1_dir,s1_dir,s1_dir)
+#         cmd = '"%s" -s GPT_SoVITS/s1_train.py --config_file "%s" ' % (python_exec, tmp_config_path)
+#         yield (
+#             process_info(process_name_gpt, "opened"),
+#             {"__type__": "update", "visible": False},
+#             {"__type__": "update", "visible": True},
+#             {"__type__": "update"},
+#             {"__type__": "update"},
+#         )
+#         print(cmd)
+#         p_train_GPT = Popen(cmd, shell=True)
+#         p_train_GPT.wait()
+#         p_train_GPT = None
+#         SoVITS_dropdown_update, GPT_dropdown_update = change_choices()
+#         yield (
+#             process_info(process_name_gpt, "finish"),
+#             {"__type__": "update", "visible": True},
+#             {"__type__": "update", "visible": False},
+#             SoVITS_dropdown_update,
+#             GPT_dropdown_update,
+#         )
+#     else:
+#         yield (
+#             process_info(process_name_gpt, "occupy"),
+#             {"__type__": "update", "visible": False},
+#             {"__type__": "update", "visible": True},
+#             {"__type__": "update"},
+#             {"__type__": "update"},
+#         )
 
 def open1Bb(
     batch_size,
@@ -601,18 +676,57 @@ def open1Bb(
     global p_train_GPT
     if p_train_GPT == None:
         exp_name = exp_name.rstrip(" ")
-        with open(
-            "GPT_SoVITS/configs/s1longer.yaml" if version == "v1" else "GPT_SoVITS/configs/s1longer-v2.yaml"
-        ) as f:
-            data = f.read()
-            data = yaml.load(data, Loader=yaml.FullLoader)
+        
+        # --- ĐOẠN SỬA ĐỔI: KIỂM TRA FILE TRƯỚC KHI MỞ ---
+        config_path = "GPT_SoVITS/configs/s1longer.yaml" if version == "v1" else "GPT_SoVITS/configs/s1longer-v2.yaml"
+        
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                data = yaml.load(f, Loader=yaml.FullLoader)
+        else:
+            # Nếu không có file, tự tạo cấu hình mặc định trong bộ nhớ
+            print(f"Cảnh báo: Không tìm thấy {config_path}, đang khởi tạo cấu hình mặc định.")
+            data = {
+                "train": {
+                    "learning_rate": 0.01,
+                    "precision": "16" if is_half else "32",
+                    "save_every_n_epoch": save_every_epoch,
+                    "seed": 42,
+                },
+                "optimizer": {
+                    "lr_init": 0.00001,
+                    "lr": 0.01,
+                    "lr_end": 0.0001,
+                    "warmup_steps": 100,
+                    "total_steps": 32000
+                },
+                "model": {
+                    "hidden_dim": 512,      # Giảm từ 1024 xuống 512
+                    "embedding_dim": 512,   # Giảm từ 1024 xuống 512
+                    "head": 8,              # Giảm từ 16 xuống 8
+                    "n_layer": 12,          # Giảm từ 24 xuống 12
+                    "p_dropout": 0.0,
+                    "dropout": 0.0,
+                    "vocab_size": 1025,     # Tăng lên 1025 theo chuẩn v2 thường
+                    "phoneme_vocab_size": 512,
+                    "top_k": 3,
+                    "max_sec": 54,
+                    "EOS": 1024             # Phải bằng vocab_size - 1 (1025 - 1 = 1024)
+                }
+            }
+        # ----------------------------------------------
+
         s1_dir = "%s/%s" % (exp_root, exp_name)
         os.makedirs("%s/logs_s1" % (s1_dir), exist_ok=True)
+        
         if check_for_existance([s1_dir], is_train=True):
             check_details([s1_dir], is_train=True)
+            
         if is_half == False:
             data["train"]["precision"] = "32"
             batch_size = max(1, batch_size // 2)
+            
+        # Cập nhật thông số từ WebUI
         data["train"]["batch_size"] = batch_size
         data["train"]["epochs"] = total_epoch
         data["pretrained_s1"] = pretrained_s1
@@ -625,15 +739,17 @@ def open1Bb(
         data["train_semantic_path"] = "%s/6-name2semantic.tsv" % s1_dir
         data["train_phoneme_path"] = "%s/2-name2text.txt" % s1_dir
         data["output_dir"] = "%s/logs_s1_%s" % (s1_dir, version)
-        # data["version"]=version
 
         os.environ["_CUDA_VISIBLE_DEVICES"] = str(fix_gpu_numbers(gpu_numbers.replace("-", ",")))
         os.environ["hz"] = "25hz"
+        
+        # Ghi ra file tạm (luôn thành công vì dùng chế độ "w")
         tmp_config_path = "%s/tmp_s1.yaml" % tmp
         with open(tmp_config_path, "w") as f:
             f.write(yaml.dump(data, default_flow_style=False))
-        # cmd = '"%s" GPT_SoVITS/s1_train.py --config_file "%s" --train_semantic_path "%s/6-name2semantic.tsv" --train_phoneme_path "%s/2-name2text.txt" --output_dir "%s/logs_s1"'%(python_exec,tmp_config_path,s1_dir,s1_dir,s1_dir)
+            
         cmd = '"%s" -s GPT_SoVITS/s1_train.py --config_file "%s" ' % (python_exec, tmp_config_path)
+        
         yield (
             process_info(process_name_gpt, "opened"),
             {"__type__": "update", "visible": False},
@@ -662,7 +778,6 @@ def open1Bb(
             {"__type__": "update"},
         )
 
-
 def close1Bb():
     global p_train_GPT
     if p_train_GPT is not None:
@@ -676,7 +791,7 @@ def close1Bb():
 
 
 ps_slice = []
-process_name_slice = i18n("语音切分")
+process_name_slice = i18n("Audio Slicing")
 
 
 def open_slice(inp, opt_root, threshold, min_length, min_interval, hop_size, max_sil_kept, _max, alpha, n_parts):
@@ -686,7 +801,7 @@ def open_slice(inp, opt_root, threshold, min_length, min_interval, hop_size, max
     check_for_existance([inp])
     if os.path.exists(inp) == False:
         yield (
-            i18n("输入路径不存在"),
+            i18n("Input path does not exis"),
             {"__type__": "update", "visible": True},
             {"__type__": "update", "visible": False},
             {"__type__": "update"},
@@ -700,7 +815,7 @@ def open_slice(inp, opt_root, threshold, min_length, min_interval, hop_size, max
         pass
     else:
         yield (
-            i18n("输入路径存在但不可用"),
+            i18n("Input path exists but is not usable"),
             {"__type__": "update", "visible": True},
             {"__type__": "update", "visible": False},
             {"__type__": "update"},
@@ -1542,7 +1657,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False, js=js, css=css
                                 # value=r"D:\RVC1006\GPT-SoVITS\raw\xxx",
                                 interactive=True,
                                 placeholder=i18n(
-                                    "填切割后音频所在目录！读取的音频文件完整路径=该目录-拼接-list文件里波形对应的文件名（不是全路径）。如果留空则使用.list文件里的绝对全路径。"
+                                    "Điền đường dẫn chứa các file âm thanh sau khi cắt! Đường dẫn đầy đủ của file âm thanh sẽ được đọc theo công thức: [Đường dẫn này] + [Tên file âm thanh tương ứng trong file .list] (không phải đường dẫn tuyệt đối). Nếu để trống, hệ thống sẽ sử dụng đường dẫn tuyệt đối có sẵn trong file .list."
                                 ),
                                 scale=10,
                             )
@@ -1559,7 +1674,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False, js=js, css=css
                             bert_pretrained_dir = gr.Textbox(
                                 label=i18n("预训练中文BERT模型路径"),
                                 value="GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large",
-                                interactive=False,
+                                interactive=True,
                                 lines=2,
                             )
                         with gr.Row():
@@ -1969,8 +2084,8 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False, js=js, css=css
                 ],
             )
 
-        with gr.TabItem(i18n("2-GPT-SoVITS-变声")):
-            gr.Markdown(value=i18n("施工中，请静候佳音"))
+        with gr.TabItem(i18n("2-GPT-SoVITS-Voice Conversion")):
+            gr.Markdown(value=i18n("Under construction, please stay tuned"))
 
     app.queue().launch(  # concurrency_count=511, max_size=1022
         server_name="0.0.0.0",
