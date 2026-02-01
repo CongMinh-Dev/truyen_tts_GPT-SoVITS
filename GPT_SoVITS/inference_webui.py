@@ -137,7 +137,9 @@ if torch.cuda.is_available():
 else:
     device = "cpu"
 
+#nếu dùng version1 thì dùng dict 1, version2 thì dùng dict2. hàm i18n() là nó tự biết dịch. vd:khi mở trịnh duyệt ở tiếng anh thì sẽ tự dịch chữ trong hàm sang tiếng anh.
 dict_language_v1 = {
+    "Vietnamese": "vi",
     i18n("中文"): "all_zh",  # 全部按中文识别
     i18n("英文"): "en",  # 全部按英文识别#######不变
     i18n("日文"): "all_ja",  # 全部按日文识别
@@ -146,6 +148,7 @@ dict_language_v1 = {
     i18n("多语种混合"): "auto",  # 多语种启动切分识别语种
 }
 dict_language_v2 = {
+    "Vietnamese": "vi",
     i18n("中文"): "all_zh",  # 全部按中文识别
     i18n("英文"): "en",  # 全部按英文识别#######不变
     i18n("日文"): "all_ja",  # 全部按日文识别
@@ -514,27 +517,76 @@ def resample(audio_tensor, sr0, sr1, device):
     return resample_transform_dict[key](audio_tensor)
 
 
+# def get_spepc(hps, filename, dtype, device, is_v2pro=False):
+#     # audio = load_audio(filename, int(hps.data.sampling_rate))
+
+#     # audio, sampling_rate = librosa.load(filename, sr=int(hps.data.sampling_rate))
+#     # audio = torch.FloatTensor(audio)
+
+#     sr1 = int(hps.data.sampling_rate)
+#     audio, sr0 = torchaudio.load(filename)
+#     if sr0 != sr1:
+#         audio = audio.to(device)
+#         if audio.shape[0] == 2:
+#             audio = audio.mean(0).unsqueeze(0)
+#         audio = resample(audio, sr0, sr1, device)
+#     else:
+#         audio = audio.to(device)
+#         if audio.shape[0] == 2:
+#             audio = audio.mean(0).unsqueeze(0)
+
+#     maxx = audio.abs().max()
+#     if maxx > 1:
+#         audio /= min(2, maxx)
+#     spec = spectrogram_torch(
+#         audio,
+#         hps.data.filter_length,
+#         hps.data.sampling_rate,
+#         hps.data.hop_length,
+#         hps.data.win_length,
+#         center=False,
+#     )
+#     spec = spec.to(dtype)
+#     if is_v2pro == True:
+#         audio = resample(audio, sr1, 16000, device).to(dtype)
+#     return spec, audio
+
+import soundfile as sf
 def get_spepc(hps, filename, dtype, device, is_v2pro=False):
-    # audio = load_audio(filename, int(hps.data.sampling_rate))
-
-    # audio, sampling_rate = librosa.load(filename, sr=int(hps.data.sampling_rate))
-    # audio = torch.FloatTensor(audio)
-
+    # Xác định tần số lấy mẫu mục tiêu từ cấu hình mô hình (thường là 32k hoặc 44.1k)
     sr1 = int(hps.data.sampling_rate)
-    audio, sr0 = torchaudio.load(filename)
-    if sr0 != sr1:
-        audio = audio.to(device)
-        if audio.shape[0] == 2:
-            audio = audio.mean(0).unsqueeze(0)
-        audio = resample(audio, sr0, sr1, device)
-    else:
-        audio = audio.to(device)
-        if audio.shape[0] == 2:
-            audio = audio.mean(0).unsqueeze(0)
+    
+    # KỸ THUẬT NÉ FFMPEG: Sử dụng soundfile để đọc dữ liệu thô từ file wav/flac
+    try:
+        # Đọc file âm thanh mẫu (Reference Audio)
+        audio, sr0 = sf.read(filename)
+        audio = torch.FloatTensor(audio)
+        
+        # soundfile thường đọc ra dạng [số_mẫu, số_kênh]
+        # Nếu audio có 2 kênh (Stereo), ta chuyển về 1 kênh (Mono) bằng cách lấy trung bình
+        if len(audio.shape) > 1:
+            audio = audio.mean(-1)
+            
+        # Đưa về định dạng [1, số_mẫu] mà GPT-SoVITS yêu cầu
+        audio = audio.unsqueeze(0)
+    except Exception as e:
+        print(f"Sử dụng soundfile thất bại, thử lại với torchaudio: {e}")
+        # Phương án dự phòng (Fallback) nếu soundfile không hỗ trợ định dạng file đó
+        audio, sr0 = torchaudio.load(filename)
 
+    # Đưa tensor âm thanh lên thiết bị xử lý (CPU hoặc GPU)
+    audio = audio.to(device)
+
+    # Thực hiện Resample nếu tần số lấy mẫu của file gốc (sr0) khác với mô hình (sr1)
+    if sr0 != sr1:
+        audio = resample(audio, sr0, sr1, device)
+
+    # Chuẩn hóa biên độ (Normalize) để tránh bị rè hoặc tiếng quá nhỏ
     maxx = audio.abs().max()
     if maxx > 1:
         audio /= min(2, maxx)
+        
+    # Trích xuất Spectrogram - đây là "hình ảnh" của âm thanh mà mô hình GPT cần
     spec = spectrogram_torch(
         audio,
         hps.data.filter_length,
@@ -543,9 +595,14 @@ def get_spepc(hps, filename, dtype, device, is_v2pro=False):
         hps.data.win_length,
         center=False,
     )
+    
+    # Chuyển đổi định dạng dữ liệu (ví dụ: bfloat16 hoặc float16) để khớp với mô hình
     spec = spec.to(dtype)
+    
+    # ĐẶC BIỆT CHO v2Pro: Cần resample audio về 16kHz để bộ trích xuất đặc trưng hoạt động
     if is_v2pro == True:
         audio = resample(audio, sr1, 16000, device).to(dtype)
+        
     return spec, audio
 
 
