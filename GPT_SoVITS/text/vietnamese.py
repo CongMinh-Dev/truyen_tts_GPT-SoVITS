@@ -1,60 +1,114 @@
 import re
-from underthesea import word_tokenize
-
-# Bảng ký hiệu âm đọc cơ bản để AI không bị lỗi
-# Bạn có thể mở rộng bảng này nếu muốn độ chính xác cao hơn
-def text_normalize(text):
-    # Không dùng regex để xóa ký tự nữa vì nó đang xóa nhầm chữ tiếng Việt
-    # Chỉ viết thường và xóa khoảng trắng thừa ở đầu/cuối
-    text = text.lower().strip()
-    # Nếu muốn xóa các ký tự lạ mà vẫn giữ dấu tiếng Việt, dùng cách này:
-    text = re.sub(r'[^\w\s\.,!\?]', '', text, flags=re.UNICODE) 
-    return text
-
-def g2p(text):
-    # Sử dụng underthesea để tách từ đúng ngữ pháp tiếng Việt
-    words = word_tokenize(text)
-    phones = []
-    for word in words:
-        # Trong cấu hình đơn giản, chúng ta coi mỗi chữ cái là một âm (phone)
-        # GPT-SoVITS sẽ tự học cách đọc các chữ cái này qua quá trình Train
-        for char in word:
-            if char.strip():
-                phones.append(char)
-        phones.append(" ") # Khoảng trắng giữa các từ
-    return phones
-
-
+import sys
 import torch
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
-# Chú ý: Thay đường dẫn này bằng đường dẫn thực tế đến folder PhoBERT trên Colab của bạn
+print(">>> [DEBUG vietnamese.py] Đang nạp thư viện underthesea..."); sys.stdout.flush()
+try:
+    from underthesea import word_tokenize
+    print(">>> [DEBUG vietnamese.py] Nạp underthesea thành công."); sys.stdout.flush()
+except Exception as e:
+    print(f">>> [DEBUG vietnamese.py] LỖI khi nạp underthesea: {e}"); sys.stdout.flush()
+
+# Chú ý: Đường dẫn phải chính xác
 bert_path = "/content/GPT-SoVITS/pretrained_models/phobert-large" 
 
+print(f">>> [DEBUG vietnamese.py] Đang nạp Tokenizer từ: {bert_path}"); sys.stdout.flush()
 tokenizer = AutoTokenizer.from_pretrained(bert_path)
+
+print(f">>> [DEBUG vietnamese.py] Đang nạp PhoBERT Model (1024 dims)..."); sys.stdout.flush()
 bert_model = AutoModelForMaskedLM.from_pretrained(bert_path)
 
-# Kiểm tra xem có GPU không để chạy cho nhanh
+# Kiểm tra GPU
 device = "cuda" if torch.cuda.is_available() else "cpu"
-bert_model = bert_model.to(device)
+print(f">>> [DEBUG vietnamese.py] Thiết bị sử dụng: {device}"); sys.stdout.flush()
+
+if device == "cuda":
+    print(">>> [DEBUG vietnamese.py] Đang chuyển Model sang GPU (half precision)..."); sys.stdout.flush()
+    bert_model = bert_model.half().to(device)
+else:
+    print(">>> [DEBUG vietnamese.py] CẢNH BÁO: Đang chạy trên CPU, rất dễ bị Illegal Instruction!"); sys.stdout.flush()
+    bert_model = bert_model.to(device)
+
+print(">>> [DEBUG vietnamese.py] Nạp PhoBERT hoàn tất."); sys.stdout.flush()
+
+def text_normalize(text):
+    text = text.lower().strip()
+    text = re.sub(r'[^\w\s\.,!\?]', '', text, flags=re.UNICODE) 
+    return text
+
+
+def g2p(text):
+    print(f">>> [DEBUG g2p] Đang tách từ chuẩn cho câu: {text}"); sys.stdout.flush()
+    # Tách từ đơn giản bằng split để khớp với logic gộp của BERT
+    words = text.split() 
+    phones = []
+    for word in words:
+        # Giữ nguyên các ký tự để SoVITS giải mã âm thanh
+        for char in word:
+            phones.append(char)
+        phones.append(" ") # Khoảng trắng phân tách từ
+    
+    print(f">>> [DEBUG g2p] Tách từ thành công. Số lượng phones: {len(phones)}"); sys.stdout.flush()
+    return phones
+
+
 
 def get_bert_feature(text, word2ph):
+    print(f"\n[CHECK] Văn bản: {text}")
+    print(f"[CHECK] word2ph (Số phone mỗi từ): {word2ph} | Tổng số từ G2P đếm: {len(word2ph)}")
+    sys.stdout.flush()
     with torch.no_grad():
         inputs = tokenizer(text, return_tensors="pt").to(device)
         outputs = bert_model(**inputs, output_hidden_states=True)
-        # Lấy hidden states cuối cùng (1024 chiều cho bản large)
         res = outputs.hidden_states[-1].squeeze(0)
+        res = res.float().cpu()
+
+    # 1. Kiểm tra Tokenizer thực tế của PhoBERT
+    token_list = tokenizer.convert_ids_to_tokens(inputs['input_ids'][0])
+    print(f">>> [DEBUG BERT] Tokens thực tế PhoBERT: {token_list}")
+    
+    # Bỏ [CLS] và [SEP]
+    useful_res = res[1:-1]
+    useful_tokens = token_list[1:-1]
+
+    # 2. Xử lý gộp Sub-tokens (@@)
+    word_signals = []
+    if len(useful_tokens) > 0:
+        temp_feat = useful_res[0]
+        count = 1
+        current_word_tokens = [useful_tokens[0]]
         
+        for i in range(1, len(useful_tokens)):
+            if useful_tokens[i-1].endswith("@@"):
+                temp_feat += useful_res[i]
+                count += 1
+                current_word_tokens.append(useful_tokens[i])
+            else:
+                word_signals.append(temp_feat / count)
+                # print(f"    + Đã gộp nhóm: {current_word_tokens}") # Bật nếu muốn xem chi tiết gộp
+                temp_feat = useful_res[i]
+                count = 1
+                current_word_tokens = [useful_tokens[i]]
+        word_signals.append(temp_feat / count)
+
+    print(f">>> [DEBUG BERT] Số lượng từ sau khi gộp: {len(word_signals)}")
+    
+    # 3. KIỂM TRA ĐỘ LỆCH (Đây là chỗ dễ sai nhất)
+    if len(word_signals) != len(word2ph):
+        print(f"!!! CẢNH BÁO LỆCH PHA: PhoBERT thấy {len(word_signals)} từ, nhưng word2ph yêu cầu {len(word2ph)} từ.")
+        print(f"    -> Điều này sẽ khiến AI phát âm như tiếng nước ngoài.")
+    sys.stdout.flush()
+
     phone_level_feature = []
     for i in range(len(word2ph)):
         repeat_times = word2ph[i]
-        # PhoBERT dùng token [CLS] ở vị trí 0, nên từ đầu tiên bắt đầu từ index 1
-        if i + 1 < res.shape[0]:
-            feature_at_word = res[i + 1]
-        else:
-            feature_at_word = res[-1] # Tránh lỗi index out of range
-            
+        idx = min(i, len(word_signals) - 1)
+        feature = word_signals[idx] if word_signals else res[0]
+        
         for _ in range(repeat_times):
-            phone_level_feature.append(feature_at_word)
-            
-    return torch.stack(phone_level_feature).T.cpu()
+            phone_level_feature.append(feature)
+
+    return torch.stack(phone_level_feature, dim=0).T
+
+

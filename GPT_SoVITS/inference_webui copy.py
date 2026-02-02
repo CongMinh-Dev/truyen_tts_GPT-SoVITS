@@ -170,37 +170,19 @@ if is_half == True:
 else:
     bert_model = bert_model.to(device)
 
-#sửa
+
 def get_bert_feature(text, word2ph):
     with torch.no_grad():
         inputs = tokenizer(text, return_tensors="pt")
         for i in inputs:
             inputs[i] = inputs[i].to(device)
         res = bert_model(**inputs, output_hidden_states=True)
-        # Lấy hidden state lớp cuối cùng
-        # PhoBERT-large sẽ trả về (1, sequence_length, 1024)
-        res = res["hidden_states"][-1][0].cpu() 
-        # Bỏ token [CLS] ở đầu và [SEP] ở cuối để khớp với độ dài văn bản nếu cần
-        # Tuy nhiên với tiếng Việt, chúng ta cần cẩn thận với độ dài
-        res = res[1:-1] 
-
-    # --- SỬA DÒNG ASSERT VÀ LOGIC LẶP TẠI ĐÂY ---
-    # Không dùng assert len(word2ph) == len(text) vì tiếng Việt không khớp ký tự
-    
+        res = torch.cat(res["hidden_states"][-3:-2], -1)[0].cpu()[1:-1]
+    assert len(word2ph) == len(text)
     phone_level_feature = []
-    # Duyệt theo danh sách word2ph (danh sách này có độ dài bằng số lượng phones)
     for i in range(len(word2ph)):
-        # Lấy feature tương ứng. Nếu res bị ngắn hơn do tokenizer tách từ khác 
-        # so với cách ta split, ta lấy feature cuối cùng để tránh lỗi index.
-        if i < res.shape[0]:
-            feature = res[i]
-        else:
-            feature = res[-1]
-            
-        # Lặp lại feature theo số lượng trong word2ph (thường là 1)
-        repeat_feature = feature.repeat(word2ph[i], 1)
+        repeat_feature = res[i].repeat(word2ph[i], 1)
         phone_level_feature.append(repeat_feature)
-        
     phone_level_feature = torch.cat(phone_level_feature, dim=0)
     return phone_level_feature.T
 
@@ -570,7 +552,6 @@ def resample(audio_tensor, sr0, sr1, device):
 #     return spec, audio
 
 import soundfile as sf
-#sửa
 def get_spepc(hps, filename, dtype, device, is_v2pro=False):
     # Xác định tần số lấy mẫu mục tiêu từ cấu hình mô hình (thường là 32k hoặc 44.1k)
     sr1 = int(hps.data.sampling_rate)
@@ -634,7 +615,19 @@ def clean_text_inf(text, language, version):
 
 dtype = torch.float16 if is_half == True else torch.float32
 
-#sửa
+
+# def get_bert_inf(phones, word2ph, norm_text, language):
+#     language = language.replace("all_", "")
+#     if language == "zh":
+#         bert = get_bert_feature(norm_text, word2ph).to(device)  # .to(dtype)
+#     else:
+#         bert = torch.zeros(
+#             (1024, len(phones)),
+#             dtype=torch.float16 if is_half == True else torch.float32,
+#         ).to(device)
+
+#     return bert
+
 def get_bert_inf(phones, word2ph, norm_text, language):
     print(f">>> DEBUG inside BERT: Đang tiền xử lý cho {language}"); sys.stdout.flush()
     language = language.replace("all_", "")
@@ -684,7 +677,6 @@ def get_phones_and_bert(text, language, version, final=False):
     textlist = []
     langlist = []
 
-    #sửa
     if language == "vi":
         langlist.append("vi")
         textlist.append(text)
@@ -736,8 +728,6 @@ def get_phones_and_bert(text, language, version, final=False):
     phones_list = []
     bert_list = []
     norm_text_list = []
-
-    #sửa
     for i in range(len(textlist)):
         lang = langlist[i]
 
@@ -862,9 +852,6 @@ def get_tts_wav(
     pause_second=0.3,
 ):
     global cache
-    import sys
-    import traceback
-
     if ref_wav_path:
         pass
     else:
@@ -945,9 +932,7 @@ def get_tts_wav(
     audio_opt = []
     ###s2v3暂不支持ref_free
     if not ref_free:
-        print(">>> [DEBUG TTS] Đang chuẩn hóa Prompt..."); sys.stdout.flush()
         phones1, bert1, norm_text1 = get_phones_and_bert(prompt_text, prompt_language, version)
-        print(f">>> [DEBUG TTS] Prompt chuẩn hóa xong. Bert shape: {bert1.shape}"); sys.stdout.flush()
 
     for i_text, text in enumerate(texts):
         # 解决输入目标文本的空行导致报错的问题
@@ -956,8 +941,6 @@ def get_tts_wav(
         if text[-1] not in splits:
             text += "。" if text_language != "en" else "."
         print(i18n("实际输入的目标文本(每句):"), text)
-
-        print(">>> [DEBUG TTS] Đang chuẩn hóa Target Text..."); sys.stdout.flush()
         phones2, bert2, norm_text2 = get_phones_and_bert(text, text_language, version)
         print(i18n("前端处理后的文本(每句):"), norm_text2)
         if not ref_free:
@@ -976,112 +959,106 @@ def get_tts_wav(
         if i_text in cache and if_freeze == True:
             pred_semantic = cache[i_text]
         else:
-            print(f">>> [DEBUG GPT] Bắt đầu nạp vào GPT Model. Device: {device}, Bert Dtype: {bert.dtype}"); sys.stdout.flush()
-            try:
-                with torch.no_grad():
-                    pred_semantic, idx = t2s_model.model.infer_panel(
-                        all_phoneme_ids, all_phoneme_len, None if ref_free else prompt,
-                        bert, top_k=top_k, top_p=top_p, temperature=temperature, early_stop_num=hz * max_sec,
-                    )
-                print(">>> [DEBUG GPT] GPT Inference hoàn tất!"); sys.stdout.flush()
+            with torch.no_grad():
+                pred_semantic, idx = t2s_model.model.infer_panel(
+                    all_phoneme_ids,
+                    all_phoneme_len,
+                    None if ref_free else prompt,
+                    bert,
+                    # prompt_phone_len=ph_offset,
+                    top_k=top_k,
+                    top_p=top_p,
+                    temperature=temperature,
+                    early_stop_num=hz * max_sec,
+                )
                 pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)
                 cache[i_text] = pred_semantic
-            except Exception as e:
-                print(f">>> [DEBUG GPT] LỖI CỰC NẶNG TẠI GPT: {str(e)}"); sys.stdout.flush()
-                raise e
         t3 = ttime()
         is_v2pro = model_version in {"v2Pro", "v2ProPlus"}
         # print(23333,is_v2pro,model_version)
         ###v3不存在以下逻辑和inp_refs
-        print(">>> [DEBUG VITS] bắt đầu giải mã "); sys.stdout.flush()
-        try:
-            if model_version not in v3v4set:
-                refers = []
+        if model_version not in v3v4set:
+            refers = []
+            if is_v2pro:
+                sv_emb = []
+                if sv_cn_model == None:
+                    init_sv_cn()
+            if inp_refs:
+                for path in inp_refs:
+                    try:  #####这里加上提取sv的逻辑，要么一堆sv一堆refer，要么单个sv单个refer
+                        refer, audio_tensor = get_spepc(hps, path.name, dtype, device, is_v2pro)
+                        refers.append(refer)
+                        if is_v2pro:
+                            sv_emb.append(sv_cn_model.compute_embedding3(audio_tensor))
+                    except:
+                        traceback.print_exc()
+            if len(refers) == 0:
+                refers, audio_tensor = get_spepc(hps, ref_wav_path, dtype, device, is_v2pro)
+                refers = [refers]
                 if is_v2pro:
-                    sv_emb = []
-                    if sv_cn_model == None:
-                        init_sv_cn()
-                if inp_refs:
-                    for path in inp_refs:
-                        try:  #####这里加上提取sv的逻辑，要么一堆sv一堆refer，要么单个sv单个refer
-                            refer, audio_tensor = get_spepc(hps, path.name, dtype, device, is_v2pro)
-                            refers.append(refer)
-                            if is_v2pro:
-                                sv_emb.append(sv_cn_model.compute_embedding3(audio_tensor))
-                        except:
-                            traceback.print_exc()
-                if len(refers) == 0:
-                    refers, audio_tensor = get_spepc(hps, ref_wav_path, dtype, device, is_v2pro)
-                    refers = [refers]
-                    if is_v2pro:
-                        sv_emb = [sv_cn_model.compute_embedding3(audio_tensor)]
-                if is_v2pro:
-                    audio = vq_model.decode(
-                        pred_semantic, torch.LongTensor(phones2).to(device).unsqueeze(0), refers, speed=speed, sv_emb=sv_emb
-                    )[0][0]
-                else:
-                    audio = vq_model.decode(
-                        pred_semantic, torch.LongTensor(phones2).to(device).unsqueeze(0), refers, speed=speed
-                    )[0][0]
+                    sv_emb = [sv_cn_model.compute_embedding3(audio_tensor)]
+            if is_v2pro:
+                audio = vq_model.decode(
+                    pred_semantic, torch.LongTensor(phones2).to(device).unsqueeze(0), refers, speed=speed, sv_emb=sv_emb
+                )[0][0]
             else:
-                refer, audio_tensor = get_spepc(hps, ref_wav_path, dtype, device)
-                phoneme_ids0 = torch.LongTensor(phones1).to(device).unsqueeze(0)
-                phoneme_ids1 = torch.LongTensor(phones2).to(device).unsqueeze(0)
-                fea_ref, ge = vq_model.decode_encp(prompt.unsqueeze(0), phoneme_ids0, refer)
-                ref_audio, sr = torchaudio.load(ref_wav_path)
-                ref_audio = ref_audio.to(device).float()
-                if ref_audio.shape[0] == 2:
-                    ref_audio = ref_audio.mean(0).unsqueeze(0)
-                tgt_sr = 24000 if model_version == "v3" else 32000
-                if sr != tgt_sr:
-                    ref_audio = resample(ref_audio, sr, tgt_sr, device)
-                # print("ref_audio",ref_audio.abs().mean())
-                mel2 = mel_fn(ref_audio) if model_version == "v3" else mel_fn_v4(ref_audio)
-                mel2 = norm_spec(mel2)
-                T_min = min(mel2.shape[2], fea_ref.shape[2])
-                mel2 = mel2[:, :, :T_min]
-                fea_ref = fea_ref[:, :, :T_min]
-                Tref = 468 if model_version == "v3" else 500
-                Tchunk = 934 if model_version == "v3" else 1000
-                if T_min > Tref:
-                    mel2 = mel2[:, :, -Tref:]
-                    fea_ref = fea_ref[:, :, -Tref:]
-                    T_min = Tref
-                chunk_len = Tchunk - T_min
-                mel2 = mel2.to(dtype)
-                fea_todo, ge = vq_model.decode_encp(pred_semantic, phoneme_ids1, refer, ge, speed)
-                cfm_resss = []
-                idx = 0
-                while 1:
-                    fea_todo_chunk = fea_todo[:, :, idx : idx + chunk_len]
-                    if fea_todo_chunk.shape[-1] == 0:
-                        break
-                    idx += chunk_len
-                    fea = torch.cat([fea_ref, fea_todo_chunk], 2).transpose(2, 1)
-                    cfm_res = vq_model.cfm.inference(
-                        fea, torch.LongTensor([fea.size(1)]).to(fea.device), mel2, sample_steps, inference_cfg_rate=0
-                    )
-                    cfm_res = cfm_res[:, :, mel2.shape[2] :]
-                    mel2 = cfm_res[:, :, -T_min:]
-                    fea_ref = fea_todo_chunk[:, :, -T_min:]
-                    cfm_resss.append(cfm_res)
-                cfm_res = torch.cat(cfm_resss, 2)
-                cfm_res = denorm_spec(cfm_res)
-                if model_version == "v3":
-                    if bigvgan_model == None:
-                        init_bigvgan()
-                else:  # v4
-                    if hifigan_model == None:
-                        init_hifigan()
-                vocoder_model = bigvgan_model if model_version == "v3" else hifigan_model
-                with torch.inference_mode():
-                    wav_gen = vocoder_model(cfm_res)
-                    audio = wav_gen[0][0]  # .cpu().detach().numpy()
-        except Exception as e:
-            print(f">>> [DEBUG VITS] LỖI DECODE: {str(e)}"); sys.stdout.flush()
-            traceback.print_exc()
-            raise e   
-        print(">>> [DEBUG VITS] Giải mã âm thanh thành công!"); sys.stdout.flush()
+                audio = vq_model.decode(
+                    pred_semantic, torch.LongTensor(phones2).to(device).unsqueeze(0), refers, speed=speed
+                )[0][0]
+        else:
+            refer, audio_tensor = get_spepc(hps, ref_wav_path, dtype, device)
+            phoneme_ids0 = torch.LongTensor(phones1).to(device).unsqueeze(0)
+            phoneme_ids1 = torch.LongTensor(phones2).to(device).unsqueeze(0)
+            fea_ref, ge = vq_model.decode_encp(prompt.unsqueeze(0), phoneme_ids0, refer)
+            ref_audio, sr = torchaudio.load(ref_wav_path)
+            ref_audio = ref_audio.to(device).float()
+            if ref_audio.shape[0] == 2:
+                ref_audio = ref_audio.mean(0).unsqueeze(0)
+            tgt_sr = 24000 if model_version == "v3" else 32000
+            if sr != tgt_sr:
+                ref_audio = resample(ref_audio, sr, tgt_sr, device)
+            # print("ref_audio",ref_audio.abs().mean())
+            mel2 = mel_fn(ref_audio) if model_version == "v3" else mel_fn_v4(ref_audio)
+            mel2 = norm_spec(mel2)
+            T_min = min(mel2.shape[2], fea_ref.shape[2])
+            mel2 = mel2[:, :, :T_min]
+            fea_ref = fea_ref[:, :, :T_min]
+            Tref = 468 if model_version == "v3" else 500
+            Tchunk = 934 if model_version == "v3" else 1000
+            if T_min > Tref:
+                mel2 = mel2[:, :, -Tref:]
+                fea_ref = fea_ref[:, :, -Tref:]
+                T_min = Tref
+            chunk_len = Tchunk - T_min
+            mel2 = mel2.to(dtype)
+            fea_todo, ge = vq_model.decode_encp(pred_semantic, phoneme_ids1, refer, ge, speed)
+            cfm_resss = []
+            idx = 0
+            while 1:
+                fea_todo_chunk = fea_todo[:, :, idx : idx + chunk_len]
+                if fea_todo_chunk.shape[-1] == 0:
+                    break
+                idx += chunk_len
+                fea = torch.cat([fea_ref, fea_todo_chunk], 2).transpose(2, 1)
+                cfm_res = vq_model.cfm.inference(
+                    fea, torch.LongTensor([fea.size(1)]).to(fea.device), mel2, sample_steps, inference_cfg_rate=0
+                )
+                cfm_res = cfm_res[:, :, mel2.shape[2] :]
+                mel2 = cfm_res[:, :, -T_min:]
+                fea_ref = fea_todo_chunk[:, :, -T_min:]
+                cfm_resss.append(cfm_res)
+            cfm_res = torch.cat(cfm_resss, 2)
+            cfm_res = denorm_spec(cfm_res)
+            if model_version == "v3":
+                if bigvgan_model == None:
+                    init_bigvgan()
+            else:  # v4
+                if hifigan_model == None:
+                    init_hifigan()
+            vocoder_model = bigvgan_model if model_version == "v3" else hifigan_model
+            with torch.inference_mode():
+                wav_gen = vocoder_model(cfm_res)
+                audio = wav_gen[0][0]  # .cpu().detach().numpy()
         max_audio = torch.abs(audio).max()  # 简单防止16bit爆音
         if max_audio > 1:
             audio = audio / max_audio

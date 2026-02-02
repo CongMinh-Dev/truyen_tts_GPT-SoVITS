@@ -320,6 +320,17 @@ ja_symbols = [
     # "^", #开始符
 ]
 
+#sửa
+vi_symbols = [
+    "a", "à", "á", "ả", "ã", "ạ", "ă", "ằ", "ắ", "ẳ", "ẵ", "ặ", "â", "ầ", "ấ", "ẩ", "ẫ", "ậ",
+    "e", "è", "é", "ẻ", "ẽ", "ẹ", "ê", "ề", "ế", "ể", "ễ", "ệ",
+    "i", "ì", "í", "ỉ", "ĩ", "ị",
+    "o", "ò", "ó", "ỏ", "õ", "ọ", "ô", "ồ", "ố", "ổ", "ỗ", "ộ", "ơ", "ờ", "ớ", "ở", "ỡ", "ợ",
+    "u", "ù", "ú", "ủ", "ũ", "ụ", "ư", "ừ", "ứ", "ử", "ữ", "ự",
+    "y", "ỳ", "ý", "ỷ", "ỹ", "ỵ",
+    "b", "c", "d", "đ", "g", "h", "k", "l", "m", "n", "p", "q", "r", "s", "t", "v", "x"
+]
+
 arpa = {
     "AH0",
     "S",
@@ -780,7 +791,7 @@ yue_symbols = {
 }
 
 # symbols = [pad] + c + v + ja_symbols + pu_symbols + list(arpa)+list(ko_symbols)#+list(yue_symbols)###直接这么加yue顺序乱了
-symbols = [pad] + c + v + ja_symbols + pu_symbols + list(arpa)
+symbols = [pad] + c + v + ja_symbols + vi_symbols + pu_symbols + list(arpa) #sửa
 symbols = sorted(set(symbols))
 # print(len(symbols))
 symbols += ["[", "]"]  ##日文新增上升下降调型
