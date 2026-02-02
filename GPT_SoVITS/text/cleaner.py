@@ -39,10 +39,16 @@ def clean_text(text, language, version=None):
         norm_text = language_module.text_normalize(text)
     else:
         norm_text = text
-    if language == "zh" or language == "yue":  ##########
+    if language == "zh" or language == "yue":
         phones, word2ph = language_module.g2p(norm_text)
         assert len(phones) == sum(word2ph)
         assert len(norm_text) == len(word2ph)
+    elif language == "vi": #sửa
+        phones, word2ph = language_module.g2p(norm_text)
+        print(f">>> [LOG CLEANER-VI] Text: {norm_text}")
+        print(f">>> [LOG CLEANER-VI] Word2ph: {word2ph} (Len: {len(word2ph)})")
+        print(f">>> [LOG CLEANER-VI] Phones: {len(phones)} phones")
+        assert len(phones) == sum(word2ph)
     elif language == "en":
         phones = language_module.g2p(norm_text)
         if len(phones) < 4:

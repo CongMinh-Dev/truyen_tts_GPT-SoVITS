@@ -1,20 +1,32 @@
 import re
 import sys
 import torch
+import os
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
-print(">>> [DEBUG vietnamese.py] Đang nạp thư viện underthesea..."); sys.stdout.flush()
-try:
-    from underthesea import word_tokenize
-    print(">>> [DEBUG vietnamese.py] Nạp underthesea thành công."); sys.stdout.flush()
-except Exception as e:
-    print(f">>> [DEBUG vietnamese.py] LỖI khi nạp underthesea: {e}"); sys.stdout.flush()
+
 
 # Chú ý: Đường dẫn phải chính xác
 bert_path = "/content/GPT-SoVITS/pretrained_models/phobert-large" 
 
 print(f">>> [DEBUG vietnamese.py] Đang nạp Tokenizer từ: {bert_path}"); sys.stdout.flush()
 tokenizer = AutoTokenizer.from_pretrained(bert_path)
+# --- THÊM CÁC DÒNG KIỂM TRA ký tự tách của phobert-large TẠI ĐÂY ---
+print(">>> [KẾT QUẢ KIỂM TRA TOKENIZER]")
+print(f"Special tokens map: {tokenizer.special_tokens_map}")
+# Kiểm tra subword_prefix (Lưu ý: PhoBERT thường dùng suffix @@ nên prefix có thể là None hoặc rỗng)
+if hasattr(tokenizer, 'subword_prefix'):
+    print(f"Subword prefix: {tokenizer.subword_prefix}")
+else:
+    print("Tokenizer này không sử dụng subword_prefix (có thể dùng suffix @@)")
+
+# Test thử một từ dễ bị tách sub-word
+test_word = "khkũng"
+print(f"Tokenize thử từ '{test_word}': {tokenizer.tokenize(test_word)}")
+print("-" * 30)
+sys.stdout.flush()
+# -------------------------------------
+
 
 print(f">>> [DEBUG vietnamese.py] Đang nạp PhoBERT Model (1024 dims)..."); sys.stdout.flush()
 bert_model = AutoModelForMaskedLM.from_pretrained(bert_path)
@@ -32,83 +44,193 @@ else:
 
 print(">>> [DEBUG vietnamese.py] Nạp PhoBERT hoàn tất."); sys.stdout.flush()
 
+# def text_normalize(text):
+#     text = text.lower().strip()
+#     text = re.sub(r'[^\w\s\.,!\?]', '', text, flags=re.UNICODE) 
+#     return text
+
 def text_normalize(text):
     text = text.lower().strip()
-    text = re.sub(r'[^\w\s\.,!\?]', '', text, flags=re.UNICODE) 
+    # Thêm khoảng trống quanh dấu câu để split() chuẩn hơn
+    text = re.sub(r'([.,!?])', r' \1 ', text)
+    # Loại bỏ các ký tự lạ, chỉ giữ lại chữ cái, số và dấu câu cơ bản
+    text = re.sub(r'[^\w\s\.,!\?]', '', text, flags=re.UNICODE)
+    # Xử lý khoảng trắng thừa
+    text = re.sub(r'\s+', ' ', text).strip()
     return text
 
 
-def g2p(text):
-    print(f">>> [DEBUG g2p] Đang tách từ chuẩn cho câu: {text}"); sys.stdout.flush()
-    # Tách từ đơn giản bằng split để khớp với logic gộp của BERT
-    words = text.split() 
-    phones = []
-    for word in words:
-        # Giữ nguyên các ký tự để SoVITS giải mã âm thanh
-        for char in word:
-            phones.append(char)
-        phones.append(" ") # Khoảng trắng phân tách từ
+# def g2p(text):
+#     text = text_normalize(text)
+#     print(f"\n>>> [DEBUG G2P] Xử lý câu: {text}")
+#     words = text.split()
+#     all_phones = []
+#     word2ph = []
+#     for word in words:
+#         current_word_phones = [char for char in word]
+#         current_word_phones.append(" ") # Phone khoảng trắng
+#         all_phones.extend(current_word_phones)
+#         word2ph.append(len(current_word_phones))
     
-    print(f">>> [DEBUG g2p] Tách từ thành công. Số lượng phones: {len(phones)}"); sys.stdout.flush()
-    return phones
+#     print(f">>> [DEBUG G2P] Danh sách word2ph: {word2ph}")
+#     print(f">>> [DEBUG G2P] Tổng số từ: {len(word2ph)} | Tổng phones: {len(all_phones)}")
+#     sys.stdout.flush()
+#     return all_phones, word2ph
 
+def g2p(text):
+    global tokenizer
+    text = text_normalize(text)
+    print(f"\n>>> [DEBUG G2P] Xử lý câu bằng PhoBERT Tokenizer: {text}")
+    
+    # Dùng PhoBERT để tách token
+    raw_tokens = tokenizer.tokenize(text)
+    
+    words = []
+    if len(raw_tokens) > 0:
+        temp_word = raw_tokens[0]
+        for i in range(1, len(raw_tokens)):
+            if raw_tokens[i-1].endswith("@@"):
+                # Nếu token trước có @@, gộp token hiện tại vào (xóa @@)
+                temp_word = temp_word[:-2] + raw_tokens[i]
+            else:
+                words.append(temp_word)
+                temp_word = raw_tokens[i]
+        words.append(temp_word)
+
+    all_phones = []
+    word2ph = []
+    for word in words:
+        # Tách từng chữ cái làm phone (vẫn giữ logic đơn giản để tránh lỗi)
+        current_word_phones = [char for char in word]
+        current_word_phones.append(" ") # Thêm khoảng trắng sau mỗi từ
+        
+        all_phones.extend(current_word_phones)
+        word2ph.append(len(current_word_phones))
+    
+    print(f">>> [DEBUG G2P] Kết quả sau gộp: {words}")
+    print(f">>> [DEBUG G2P] Word2ph: {word2ph} | Tổng phones: {len(all_phones)}")
+    sys.stdout.flush()
+    return all_phones, word2ph
+
+
+
+# def get_bert_feature(text, word2ph):
+#     global bert_model, tokenizer, device
+#     text = text_normalize(text)
+    
+#     # 1. Theo dõi tiến trình qua PID
+#     pid = os.getpid()
+#     print(f"[BERT-P{pid}] Đang xử lý: {text[:30]}...")
+    
+#     with torch.no_grad():
+#         inputs = tokenizer(text, return_tensors="pt")
+#         for i in inputs:
+#             inputs[i] = inputs[i].to(device)
+#         outputs = bert_model(**inputs, output_hidden_states=True)
+#         # THÊM .clone() để an toàn cho đa luồng
+#         res = outputs.hidden_states[-1].squeeze(0).float().cpu().clone()
+#         token_list = tokenizer.convert_ids_to_tokens(inputs['input_ids'][0])
+        
+#         # Giải phóng bộ nhớ đệm GPU ngay sau khi tính xong
+#         if device == "cuda":
+#             torch.cuda.empty_cache()
+
+#     useful_res = res[1:-1]
+#     useful_tokens = token_list[1:-1]
+    
+#     word_signals = []
+#     if len(useful_tokens) > 0:
+#         temp_feat = useful_res[0]
+#         count = 1
+#         for i in range(1, len(useful_tokens)):
+#             if useful_tokens[i-1].endswith("@@"):
+#                 temp_feat += useful_res[i]
+#                 count += 1
+#             else:
+#                 word_signals.append(temp_feat / count)
+#                 temp_feat = useful_res[i]
+#                 count = 1
+#         word_signals.append(temp_feat / count)
+
+#     # 4. Ép buộc độ dài (Tránh lỗi AssertionError)
+#     final_word_signals = []
+#     for i in range(len(word2ph)):
+#         idx = min(i, len(word_signals) - 1)
+#         if idx >= 0:
+#             final_word_signals.append(word_signals[idx])
+#         else:
+#             # Nếu PhoBERT không tìm thấy từ nào (lỗi hiếm), trả về tensor 0
+#             final_word_signals.append(torch.zeros(1024))
+
+#     # 5. Ánh xạ lên cấp độ phone
+#     phone_level_feature = []
+#     for i in range(len(word2ph)):
+#         repeat_times = word2ph[i]
+#         feature = final_word_signals[i]
+#         for _ in range(repeat_times):
+#             phone_level_feature.append(feature)
+    
+#     phone_level_feature = torch.stack(phone_level_feature, dim=0).T
+    
+#     print(f"[BERT-P{pid}] Hoàn tất {text[:15]}... | Trả về Shape: {phone_level_feature.shape}")
+#     sys.stdout.flush()
+#     return phone_level_feature
 
 
 def get_bert_feature(text, word2ph):
-    print(f"\n[CHECK] Văn bản: {text}")
-    print(f"[CHECK] word2ph (Số phone mỗi từ): {word2ph} | Tổng số từ G2P đếm: {len(word2ph)}")
-    sys.stdout.flush()
+    global bert_model, tokenizer, device
+    text = text_normalize(text)
+    pid = os.getpid()
     with torch.no_grad():
-        inputs = tokenizer(text, return_tensors="pt").to(device)
+        inputs = tokenizer(text, return_tensors="pt")
+        for i in inputs:
+            inputs[i] = inputs[i].to(device)
         outputs = bert_model(**inputs, output_hidden_states=True)
-        res = outputs.hidden_states[-1].squeeze(0)
-        res = res.float().cpu()
+        res = outputs.hidden_states[-1].squeeze(0).float().cpu().clone()
+        token_list = tokenizer.convert_ids_to_tokens(inputs['input_ids'][0])
 
-    # 1. Kiểm tra Tokenizer thực tế của PhoBERT
-    token_list = tokenizer.convert_ids_to_tokens(inputs['input_ids'][0])
-    print(f">>> [DEBUG BERT] Tokens thực tế PhoBERT: {token_list}")
-    
-    # Bỏ [CLS] và [SEP]
+    # Bỏ <s> và </s>
     useful_res = res[1:-1]
     useful_tokens = token_list[1:-1]
-
-    # 2. Xử lý gộp Sub-tokens (@@)
+    
+    # Gộp đặc trưng BERT theo quy tắc @@ y hệt như hàm g2p
+    print(f"[BERT-P{pid}] Tokens thô từ PhoBERT: {useful_tokens}")
     word_signals = []
     if len(useful_tokens) > 0:
         temp_feat = useful_res[0]
         count = 1
-        current_word_tokens = [useful_tokens[0]]
-        
         for i in range(1, len(useful_tokens)):
             if useful_tokens[i-1].endswith("@@"):
                 temp_feat += useful_res[i]
                 count += 1
-                current_word_tokens.append(useful_tokens[i])
             else:
                 word_signals.append(temp_feat / count)
-                # print(f"    + Đã gộp nhóm: {current_word_tokens}") # Bật nếu muốn xem chi tiết gộp
                 temp_feat = useful_res[i]
                 count = 1
-                current_word_tokens = [useful_tokens[i]]
         word_signals.append(temp_feat / count)
 
-    print(f">>> [DEBUG BERT] Số lượng từ sau khi gộp: {len(word_signals)}")
-    
-    # 3. KIỂM TRA ĐỘ LỆCH (Đây là chỗ dễ sai nhất)
+    # Chốt chặn kiểm tra: word_signals phải bằng len(word2ph)
+    print(f"[BERT-P{pid}] Kiểm tra khớp: BERT có {len(word_signals)} từ | G2P có {len(word2ph)} từ")
     if len(word_signals) != len(word2ph):
-        print(f"!!! CẢNH BÁO LỆCH PHA: PhoBERT thấy {len(word_signals)} từ, nhưng word2ph yêu cầu {len(word2ph)} từ.")
-        print(f"    -> Điều này sẽ khiến AI phát âm như tiếng nước ngoài.")
-    sys.stdout.flush()
+        print(f"\033[91m[CẢNH BÁO LỆCH PHA] BERT {len(word_signals)} != G2P {len(word2ph)} tại câu: {text[:50]}\033[0m")
+        # Sửa lỗi nhẹ nếu có ký tự lạ khiến tokenizer đếm sai
+        final_word_signals = []
+        for i in range(len(word2ph)):
+            idx = min(i, len(word_signals) - 1)
+            final_word_signals.append(word_signals[idx])
+    else:
+        print(f"\033[92m[OK] Đã khớp hoàn toàn!\033[0m") # In màu xanh cho dễ nhìn
+        final_word_signals = word_signals
 
     phone_level_feature = []
     for i in range(len(word2ph)):
         repeat_times = word2ph[i]
-        idx = min(i, len(word_signals) - 1)
-        feature = word_signals[idx] if word_signals else res[0]
-        
+        feature = final_word_signals[i]
         for _ in range(repeat_times):
             phone_level_feature.append(feature)
+    
+    phone_level_feature = torch.stack(phone_level_feature, dim=0).T
+    return phone_level_feature
 
-    return torch.stack(phone_level_feature, dim=0).T
 
 

@@ -27,6 +27,7 @@ import re
 import sys
 import traceback
 import warnings
+from text.vietnamese import get_bert_feature #sửa
 
 import torch
 import torchaudio
@@ -171,38 +172,38 @@ else:
     bert_model = bert_model.to(device)
 
 #sửa
-def get_bert_feature(text, word2ph):
-    with torch.no_grad():
-        inputs = tokenizer(text, return_tensors="pt")
-        for i in inputs:
-            inputs[i] = inputs[i].to(device)
-        res = bert_model(**inputs, output_hidden_states=True)
-        # Lấy hidden state lớp cuối cùng
-        # PhoBERT-large sẽ trả về (1, sequence_length, 1024)
-        res = res["hidden_states"][-1][0].cpu() 
-        # Bỏ token [CLS] ở đầu và [SEP] ở cuối để khớp với độ dài văn bản nếu cần
-        # Tuy nhiên với tiếng Việt, chúng ta cần cẩn thận với độ dài
-        res = res[1:-1] 
+# def get_bert_feature(text, word2ph):
+#     with torch.no_grad():
+#         inputs = tokenizer(text, return_tensors="pt")
+#         for i in inputs:
+#             inputs[i] = inputs[i].to(device)
+#         res = bert_model(**inputs, output_hidden_states=True)
+#         # Lấy hidden state lớp cuối cùng
+#         # PhoBERT-large sẽ trả về (1, sequence_length, 1024)
+#         res = res["hidden_states"][-1][0].cpu() 
+#         # Bỏ token [CLS] ở đầu và [SEP] ở cuối để khớp với độ dài văn bản nếu cần
+#         # Tuy nhiên với tiếng Việt, chúng ta cần cẩn thận với độ dài
+#         res = res[1:-1] 
 
-    # --- SỬA DÒNG ASSERT VÀ LOGIC LẶP TẠI ĐÂY ---
-    # Không dùng assert len(word2ph) == len(text) vì tiếng Việt không khớp ký tự
+#     # --- SỬA DÒNG ASSERT VÀ LOGIC LẶP TẠI ĐÂY ---
+#     # Không dùng assert len(word2ph) == len(text) vì tiếng Việt không khớp ký tự
     
-    phone_level_feature = []
-    # Duyệt theo danh sách word2ph (danh sách này có độ dài bằng số lượng phones)
-    for i in range(len(word2ph)):
-        # Lấy feature tương ứng. Nếu res bị ngắn hơn do tokenizer tách từ khác 
-        # so với cách ta split, ta lấy feature cuối cùng để tránh lỗi index.
-        if i < res.shape[0]:
-            feature = res[i]
-        else:
-            feature = res[-1]
+#     phone_level_feature = []
+#     # Duyệt theo danh sách word2ph (danh sách này có độ dài bằng số lượng phones)
+#     for i in range(len(word2ph)):
+#         # Lấy feature tương ứng. Nếu res bị ngắn hơn do tokenizer tách từ khác 
+#         # so với cách ta split, ta lấy feature cuối cùng để tránh lỗi index.
+#         if i < res.shape[0]:
+#             feature = res[i]
+#         else:
+#             feature = res[-1]
             
-        # Lặp lại feature theo số lượng trong word2ph (thường là 1)
-        repeat_feature = feature.repeat(word2ph[i], 1)
-        phone_level_feature.append(repeat_feature)
+#         # Lặp lại feature theo số lượng trong word2ph (thường là 1)
+#         repeat_feature = feature.repeat(word2ph[i], 1)
+#         phone_level_feature.append(repeat_feature)
         
-    phone_level_feature = torch.cat(phone_level_feature, dim=0)
-    return phone_level_feature.T
+#     phone_level_feature = torch.cat(phone_level_feature, dim=0)
+#     return phone_level_feature.T
 
 
 class DictToAttrRecursive(dict):

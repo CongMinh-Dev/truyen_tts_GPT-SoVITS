@@ -21,6 +21,7 @@ import os.path
 from text.cleaner import clean_text
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 from tools.my_utils import clean_path
+from text.vietnamese import get_bert_feature #sửa
 
 # inp_text=sys.argv[1]
 # inp_wav_dir=sys.argv[2]
@@ -60,43 +61,45 @@ if os.path.exists(txt_path) == False:
         ...
     else:
         raise FileNotFoundError(bert_pretrained_dir)
-    tokenizer = AutoTokenizer.from_pretrained(bert_pretrained_dir)
-    bert_model = AutoModelForMaskedLM.from_pretrained(bert_pretrained_dir)
-    if is_half == True:
-        bert_model = bert_model.half().to(device)
-    else:
-        bert_model = bert_model.to(device)
+    # tokenizer = AutoTokenizer.from_pretrained(bert_pretrained_dir)
+    # bert_model = AutoModelForMaskedLM.from_pretrained(bert_pretrained_dir)
+    # if is_half == True:
+    #     bert_model = bert_model.half().to(device)
+    # else:
+    #     bert_model = bert_model.to(device)
 
-    def get_bert_feature(text, word2ph):
-        global bert_model, tokenizer, device
-        with torch.no_grad():
-            inputs = tokenizer(text, return_tensors="pt")
-            for i in inputs:
-                inputs[i] = inputs[i].to(device)
+    # def get_bert_feature(text, word2ph):
+    #     global bert_model, tokenizer, device
+    #     with torch.no_grad():
+    #         inputs = tokenizer(text, return_tensors="pt")
+    #         for i in inputs:
+    #             inputs[i] = inputs[i].to(device)
             
-            # 1. Bật output_hidden_states=True để lấy các lớp vector ẩn
-            outputs = bert_model(**inputs, output_hidden_states=True)
+    #         # 1. Bật output_hidden_states=True để lấy các lớp vector ẩn
+    #         outputs = bert_model(**inputs, output_hidden_states=True)
             
-            # 2. Lấy lớp ẩn cuối cùng (last_hidden_state) thay vì lấy res[0]
-            # outputs.hidden_states là một tuple chứa tất cả các lớp, [-1] là lớp cuối
-            res = outputs.hidden_states[-1][0].cpu()[1:-1]
+    #         # 2. Lấy lớp ẩn cuối cùng (last_hidden_state) thay vì lấy res[0]
+    #         # outputs.hidden_states là một tuple chứa tất cả các lớp, [-1] là lớp cuối
+    #         res = outputs.hidden_states[-1][0].cpu()[1:-1]
         
-        # Giữ nguyên phần logic nội suy bên dưới của bạn
-        if len(res) != len(word2ph):
-            res = torch.nn.functional.interpolate(
-                res.unsqueeze(0).transpose(1, 2), 
-                size=len(word2ph), 
-                mode='linear', 
-                align_corners=False
-            ).transpose(1, 2).squeeze(0)
+    #     # Giữ nguyên phần logic nội suy bên dưới của bạn
+    #     if len(res) != len(word2ph):
+    #         res = torch.nn.functional.interpolate(
+    #             res.unsqueeze(0).transpose(1, 2), 
+    #             size=len(word2ph), 
+    #             mode='linear', 
+    #             align_corners=False
+    #         ).transpose(1, 2).squeeze(0)
             
-        phone_level_feature = []
-        for i in range(len(word2ph)):
-            # Lúc này res[i] sẽ có size 768 thay vì 64001
-            repeat_feature = res[i].repeat(word2ph[i], 1)
-            phone_level_feature.append(repeat_feature)
-        phone_level_feature = torch.cat(phone_level_feature, dim=0)
-        return phone_level_feature.T
+    #     phone_level_feature = []
+    #     for i in range(len(word2ph)):
+    #         # Lúc này res[i] sẽ có size 768 thay vì 64001
+    #         repeat_feature = res[i].repeat(word2ph[i], 1)
+    #         phone_level_feature.append(repeat_feature)
+    #     phone_level_feature = torch.cat(phone_level_feature, dim=0)
+    #     return phone_level_feature.T
+    
+
 
     def process(data, res):
         for name, text, lan in data:
@@ -109,6 +112,8 @@ if os.path.exists(txt_path) == False:
                 if os.path.exists(path_bert) == False and (lan == "zh" or lan == "vi"):
                     bert_feature = get_bert_feature(norm_text, word2ph)
                     assert bert_feature.shape[-1] == len(phones)
+                    if bert_feature.shape[-1] != len(phones):
+                        print(f"!!!kiểm tra bên 1-get-text, CẢNH BÁO: Lệch shape tại {name}. BERT: {bert_feature.shape[-1]}, Phones: {len(phones)}")
                     # torch.save(bert_feature, path_bert)
                     my_save(bert_feature, path_bert)
                 phones = " ".join(phones)
@@ -141,18 +146,27 @@ if os.path.exists(txt_path) == False:
         "VI": "vi",
         "vi": "vi",
     }
-    for line in lines[int(i_part) :: int(all_parts)]:
+
+    # Lấy ID của phần đang chạy (i_part) và tổng số phần (all_parts)
+    current_part = int(i_part)
+    total_parts = int(all_parts)
+    print(f"\n>>> [TIẾN TRÌNH {current_part}/{total_parts}] Đang bắt đầu xử lý dữ liệu...")
+    for line in lines[current_part :: total_parts]:
         try:
+            line = line.strip()
+            if not line: continue
             wav_name, spk_name, language, text = line.split("|")
-            # todo.append([name,text,"zh"])
+            # In ra để biết luồng này đang làm file nào
+            # print(f"[Luồng {current_part}] Xử lý: {wav_name}") 
             if language in language_v1_to_language_v2.keys():
                 todo.append([wav_name, text, language_v1_to_language_v2.get(language, language)])
             else:
-                print(f"\033[33m[Waring] The {language = } of {wav_name} is not supported for training.\033[0m")
+                print(f"\033[33m[Warning] Luồng {current_part}: Ngôn ngữ {language} của {wav_name} không hỗ trợ.\033[0m")
         except:
-            print(line, traceback.format_exc())
-
+            print(f"Lỗi tại Luồng {current_part}, dòng: {line}", traceback.format_exc())
+    print(f">>> [Luồng {current_part}] Đã chuẩn bị xong {len(todo)} câu. Bắt đầu chạy BERT...")
     process(todo, res)
+
     opt = []
     for name, phones, word2ph, norm_text in res:
         opt.append("%s\t%s\t%s\t%s" % (name, phones, word2ph, norm_text))
