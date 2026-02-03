@@ -252,7 +252,9 @@ elif [ "$USE_MODELSCOPE" = "true" ]; then
     PYOPENJTALK_URL="https://www.modelscope.cn/models/XXXXRT/GPT-SoVITS-Pretrained/resolve/master/open_jtalk_dic_utf_8-1.11.tar.gz"
 fi
 
-if [ ! -d "GPT_SoVITS/pretrained_models/sv" ]; then
+IS_DOWN_PRETRINED_URL=false
+
+if [ ! -d "GPT_SoVITS/pretrained_models/sv" ] && [ "$IS_DOWN_PRETRINED_URL" = "true" ]; then
     echo -e "${INFO}Downloading Pretrained Models..."
     rm -rf pretrained_models.zip
     run_wget_quiet "$PRETRINED_URL"
@@ -261,7 +263,7 @@ if [ ! -d "GPT_SoVITS/pretrained_models/sv" ]; then
     rm -rf pretrained_models.zip
     echo -e "${SUCCESS}Pretrained Models Downloaded"
 else
-    echo -e "${INFO}Pretrained Model Exists"
+    echo -e "${SUCCESS}Pretrained Model Exists hoặc cần kết nối với drive"
     echo -e "${INFO}Skip Downloading Pretrained Models"
 fi
 
