@@ -22,17 +22,27 @@ class Text2SemanticLightningModule(LightningModule):
         self.top_k = 3
         self.model = Text2SemanticDecoder(config=config, top_k=self.top_k)
         pretrained_s1 = config.get("pretrained_s1")
+        # --- bắt đầu SỬA CHO việc lệnh ký tự giữa model và ký tự tiếng việt  ---
         if pretrained_s1 and is_train:
-            # print(self.load_state_dict(torch.load(pretrained_s1,map_location="cpu")["state_dict"]))
-            print(
-                self.load_state_dict(
-                    torch.load(
-                        pretrained_s1,
-                        map_location="cpu",
-                        weights_only=False,
-                    )["weight"],
-                )
-            )
+            print(f"Đang nạp và lọc mô hình GPT Pretrained cho tiếng Việt: {pretrained_s1}")
+            # Tải trọng số từ file pretrained
+            ckpt = torch.load(pretrained_s1, map_location="cpu", weights_only=False)
+            if "weight" in ckpt:
+                ckpt = ckpt["weight"]
+            
+            # Lấy danh sách các lớp hiện tại của mô hình tiếng Việt
+            model_dict = self.state_dict()
+            
+            # Chỉ giữ lại các lớp khớp kích thước (tự động bỏ qua lớp embedding 732 khi mô hình là 799)
+            pretrained_dict = {
+                k: v for k, v in ckpt.items() 
+                if k in model_dict and v.size() == model_dict[k].size()
+            }
+            
+            # Nạp trọng số đã lọc vào mô hình
+            print(self.load_state_dict(pretrained_dict, strict=False))
+            print(f"Đã bỏ qua {len(ckpt) - len(pretrained_dict)} lớp không khớp kích thước (bao gồm bảng chữ cái cũ).")
+        # --- KẾT THÚC SỬA -----------------------------------------------------
         if is_train:
             self.automatic_optimization = False
             self.save_hyperparameters()

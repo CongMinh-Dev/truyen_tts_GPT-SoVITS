@@ -232,18 +232,18 @@ def run(rank, n_gpus, hps):
         ):
             if rank == 0:
                 logger.info("loaded pretrained %s" % hps.train.pretrained_s2G)
-            print(
-                "loaded pretrained %s" % hps.train.pretrained_s2G,
-                net_g.module.load_state_dict(
-                    torch.load(hps.train.pretrained_s2G, map_location="cpu", weights_only=False)["weight"],
-                    strict=False,
-                )
-                if torch.cuda.is_available()
-                else net_g.load_state_dict(
-                    torch.load(hps.train.pretrained_s2G, map_location="cpu", weights_only=False)["weight"],
-                    strict=False,
-                ),
-            )  ##测试不加载优化器
+            # --- bắt đầu SỬA CHO việc lệnh ký tự giữa model và ký tự tiếng việt (GENERATOR) ---
+            checkpoint_g = torch.load(hps.train.pretrained_s2G, map_location="cpu", weights_only=False)
+            pretrained_dict_g = checkpoint_g["weight"] if "weight" in checkpoint_g else checkpoint_g
+            model_dict_g = net_g.module.state_dict() if torch.cuda.is_available() else net_g.state_dict()
+            pretrained_dict_g = {k: v for k, v in pretrained_dict_g.items() if k in model_dict_g and v.size() == model_dict_g[k].size()}
+            
+            if torch.cuda.is_available():
+                net_g.module.load_state_dict(pretrained_dict_g, strict=False)
+            else:
+                net_g.load_state_dict(pretrained_dict_g, strict=False)
+            print("loaded pretrained %s sạch sẽ cho tiếng Việt" % hps.train.pretrained_s2G)
+            # --- KẾT THÚC SỬA ---
         if (
             hps.train.pretrained_s2D != ""
             and hps.train.pretrained_s2D != None
@@ -251,16 +251,18 @@ def run(rank, n_gpus, hps):
         ):
             if rank == 0:
                 logger.info("loaded pretrained %s" % hps.train.pretrained_s2D)
-            print(
-                "loaded pretrained %s" % hps.train.pretrained_s2D,
-                net_d.module.load_state_dict(
-                    torch.load(hps.train.pretrained_s2D, map_location="cpu", weights_only=False)["weight"], strict=False
-                )
-                if torch.cuda.is_available()
-                else net_d.load_state_dict(
-                    torch.load(hps.train.pretrained_s2D, map_location="cpu", weights_only=False)["weight"],
-                ),
-            )
+            # ---bắt đầu SỬA CHO việc lệnh ký tự giữa model và ký tự tiếng việt (DISCRIMINATOR) ---
+            checkpoint_d = torch.load(hps.train.pretrained_s2D, map_location="cpu", weights_only=False)
+            pretrained_dict_d = checkpoint_d["weight"] if "weight" in checkpoint_d else checkpoint_d
+            model_dict_d = net_d.module.state_dict() if torch.cuda.is_available() else net_d.state_dict()
+            pretrained_dict_d = {k: v for k, v in pretrained_dict_d.items() if k in model_dict_d and v.size() == model_dict_d[k].size()}
+            
+            if torch.cuda.is_available():
+                net_d.module.load_state_dict(pretrained_dict_d, strict=False)
+            else:
+                net_d.load_state_dict(pretrained_dict_d, strict=False)
+            print("loaded pretrained %s sạch sẽ cho tiếng Việt" % hps.train.pretrained_s2D)
+            # --- KẾT THÚC SỬA ---
 
     # scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2)
     # scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2)

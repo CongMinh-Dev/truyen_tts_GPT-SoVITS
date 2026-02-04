@@ -80,11 +80,28 @@ if os.path.exists(semantic_path) == False:
     vq_model.eval()
     # utils.load_checkpoint(utils.latest_checkpoint_path(hps.s2_ckpt_dir, "G_*.pth"), vq_model, None, True)
     # utils.load_checkpoint(pretrained_s2G, vq_model, None, True)
-    print(
-        vq_model.load_state_dict(
-            torch.load(pretrained_s2G, map_location="cpu", weights_only=False)["weight"], strict=False
-        )
-    )
+    
+    # --- ĐOẠN SỬA BẮT ĐẦU TẠI ĐÂY nhằm bỏ việc kiểm tra độ lệch ký tự của tiếng việt khai báo trong symbols2.py và trong model dùng trong bước này---
+    checkpoint = torch.load(pretrained_s2G, map_location="cpu")
+    if "weight" in checkpoint:
+        pretrained_dict = checkpoint["weight"]
+    else:
+        pretrained_dict = checkpoint
+        
+    model_dict = vq_model.state_dict()
+    # Chỉ lấy những trọng số có cùng tên và cùng kích thước (Size Match)
+    # Điều này sẽ loại bỏ enc_p.text_embedding.weight vì lệch từ 732 sang 799
+    pretrained_dict = {
+        k: v for k, v in pretrained_dict.items() 
+        if k in model_dict and v.size() == model_dict[k].size()
+    }
+    # Hiển thị các lớp bị bỏ qua để bạn kiểm tra (tùy chọn)
+    skipped_keys = [k for k in (checkpoint["weight"] if "weight" in checkpoint else checkpoint).keys() if k not in pretrained_dict]
+    print(f">>> [INFO] Đã bỏ qua {len(skipped_keys)} lớp không khớp kích thước (bao gồm text_embedding).")
+    # Nạp trọng số đã lọc vào mô hình
+    vq_model.load_state_dict(pretrained_dict, strict=False)
+    print(">>> [OK] Đã nạp thành công đặc trưng âm thanh từ Pretrained SoVITS!")
+    # ----------------------------------------------------------------------------------------------------------------------------------------
 
     def name2go(wav_name, lines):
         hubert_path = "%s/%s.pt" % (hubert_dir, wav_name)

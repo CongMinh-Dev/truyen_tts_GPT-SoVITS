@@ -790,14 +790,19 @@ yue_symbols = {
     "Yyun2",
 }
 
-# symbols = [pad] + c + v + ja_symbols + pu_symbols + list(arpa)+list(ko_symbols)#+list(yue_symbols)###直接这么加yue顺序乱了
-symbols = [pad] + c + v + ja_symbols + vi_symbols + pu_symbols + list(arpa) #sửa
-symbols = sorted(set(symbols))
-# print(len(symbols))
-symbols += ["[", "]"]  ##日文新增上升下降调型
+
+# 1. Giữ nguyên bộ khung gốc (Trung, Nhật, Anh) và sorted đúng theo chuẩn Pretrained
+# Điều này đảm bảo ID của tiếng Trung/Anh không bị nhảy sang vị trí khác
+base_raw = [pad] + c + v + ja_symbols + pu_symbols + list(arpa)
+symbols = sorted(set(base_raw))
+# 2. NỐI TIẾNG VIỆT VÀO SAU CÙNG (Tuyệt đối không dùng sorted chung ở đây)
+# Các ký tự tiếng Việt sẽ nhận ID mới bắt đầu từ sau ID cuối cùng của bộ gốc
+symbols = symbols + vi_symbols
+# 3. Thêm các thành phần bổ trợ khác (Dấu ngoặc, tiếng Hàn, tiếng Quảng)
+symbols += ["[", "]"]
 symbols += sorted(list(ko_symbols))
-symbols += sorted(list(yue_symbols))  ##新加的yue统一摆在后头#已查过开头加Y后没有重复，韩文显然不会重复
-# print(len(symbols))
+symbols += sorted(list(yue_symbols))
+
 if __name__ == "__main__":
     print(len(symbols))
 """

@@ -677,7 +677,7 @@ def open1Bb(
     if p_train_GPT == None:
         exp_name = exp_name.rstrip(" ")
         
-        # --- ĐOẠN SỬA ĐỔI: KIỂM TRA FILE TRƯỚC KHI MỞ ---
+        # --- ĐOẠN SỬA lỗi không có file yaml khi train GPT---
         config_path = "GPT_SoVITS/configs/s1longer.yaml" if version == "v1" else "GPT_SoVITS/configs/s1longer-v2.yaml"
         
         if os.path.exists(config_path):
@@ -718,10 +718,10 @@ def open1Bb(
                     "EOS": 1024,
                     "max_sec": 54,
                     "pad_token": 1024,
-                    "bert_n_layers": 24,         # Sửa từ 24 thành 12
-                    "bert_hidden_size": 1024,     # Sửa từ 1024 thành 768 (QUAN TRỌNG)
-                    "prompt_bert_hidden_size": 1024, # Sửa thành 768
-                    "train_bert_units": 1024,     # Sửa thành 768
+                    "bert_n_layers": 24,         
+                    "bert_hidden_size": 1024,     
+                    "prompt_bert_hidden_size": 1024, 
+                    "train_bert_units": 1024,     
                     "train_bert": False,
                     "logit_temp": 1.0
                 },
