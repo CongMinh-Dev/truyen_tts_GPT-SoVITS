@@ -44,11 +44,6 @@ else:
 
 print(">>> [DEBUG vietnamese.py] Nạp PhoBERT hoàn tất."); sys.stdout.flush()
 
-# def text_normalize(text):
-#     text = text.lower().strip()
-#     text = re.sub(r'[^\w\s\.,!\?]', '', text, flags=re.UNICODE) 
-#     return text
-
 def text_normalize(text):
     text = text.lower().strip()
     # Thêm khoảng trống quanh dấu câu để split() chuẩn hơn
@@ -60,22 +55,6 @@ def text_normalize(text):
     return text
 
 
-# def g2p(text):
-#     text = text_normalize(text)
-#     print(f"\n>>> [DEBUG G2P] Xử lý câu: {text}")
-#     words = text.split()
-#     all_phones = []
-#     word2ph = []
-#     for word in words:
-#         current_word_phones = [char for char in word]
-#         current_word_phones.append(" ") # Phone khoảng trắng
-#         all_phones.extend(current_word_phones)
-#         word2ph.append(len(current_word_phones))
-    
-#     print(f">>> [DEBUG G2P] Danh sách word2ph: {word2ph}")
-#     print(f">>> [DEBUG G2P] Tổng số từ: {len(word2ph)} | Tổng phones: {len(all_phones)}")
-#     sys.stdout.flush()
-#     return all_phones, word2ph
 
 def g2p(text):
     global tokenizer
@@ -111,70 +90,6 @@ def g2p(text):
     print(f">>> [DEBUG G2P] Word2ph: {word2ph} | Tổng phones: {len(all_phones)}")
     sys.stdout.flush()
     return all_phones, word2ph
-
-
-
-# def get_bert_feature(text, word2ph):
-#     global bert_model, tokenizer, device
-#     text = text_normalize(text)
-    
-#     # 1. Theo dõi tiến trình qua PID
-#     pid = os.getpid()
-#     print(f"[BERT-P{pid}] Đang xử lý: {text[:30]}...")
-    
-#     with torch.no_grad():
-#         inputs = tokenizer(text, return_tensors="pt")
-#         for i in inputs:
-#             inputs[i] = inputs[i].to(device)
-#         outputs = bert_model(**inputs, output_hidden_states=True)
-#         # THÊM .clone() để an toàn cho đa luồng
-#         res = outputs.hidden_states[-1].squeeze(0).float().cpu().clone()
-#         token_list = tokenizer.convert_ids_to_tokens(inputs['input_ids'][0])
-        
-#         # Giải phóng bộ nhớ đệm GPU ngay sau khi tính xong
-#         if device == "cuda":
-#             torch.cuda.empty_cache()
-
-#     useful_res = res[1:-1]
-#     useful_tokens = token_list[1:-1]
-    
-#     word_signals = []
-#     if len(useful_tokens) > 0:
-#         temp_feat = useful_res[0]
-#         count = 1
-#         for i in range(1, len(useful_tokens)):
-#             if useful_tokens[i-1].endswith("@@"):
-#                 temp_feat += useful_res[i]
-#                 count += 1
-#             else:
-#                 word_signals.append(temp_feat / count)
-#                 temp_feat = useful_res[i]
-#                 count = 1
-#         word_signals.append(temp_feat / count)
-
-#     # 4. Ép buộc độ dài (Tránh lỗi AssertionError)
-#     final_word_signals = []
-#     for i in range(len(word2ph)):
-#         idx = min(i, len(word_signals) - 1)
-#         if idx >= 0:
-#             final_word_signals.append(word_signals[idx])
-#         else:
-#             # Nếu PhoBERT không tìm thấy từ nào (lỗi hiếm), trả về tensor 0
-#             final_word_signals.append(torch.zeros(1024))
-
-#     # 5. Ánh xạ lên cấp độ phone
-#     phone_level_feature = []
-#     for i in range(len(word2ph)):
-#         repeat_times = word2ph[i]
-#         feature = final_word_signals[i]
-#         for _ in range(repeat_times):
-#             phone_level_feature.append(feature)
-    
-#     phone_level_feature = torch.stack(phone_level_feature, dim=0).T
-    
-#     print(f"[BERT-P{pid}] Hoàn tất {text[:15]}... | Trả về Shape: {phone_level_feature.shape}")
-#     sys.stdout.flush()
-#     return phone_level_feature
 
 
 def get_bert_feature(text, word2ph):
