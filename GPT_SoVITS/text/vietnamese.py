@@ -81,8 +81,7 @@ def g2p(text):
     for word in words:
         # Tách từng chữ cái làm phone (vẫn giữ logic đơn giản để tránh lỗi)
         current_word_phones = [char for char in word]
-        current_word_phones.append(" ") # Thêm khoảng trắng sau mỗi từ
-        
+
         all_phones.extend(current_word_phones)
         word2ph.append(len(current_word_phones))
     
@@ -128,13 +127,15 @@ def get_bert_feature(text, word2ph):
     print(f"[BERT-P{pid}] Kiểm tra khớp: BERT có {len(word_signals)} từ | G2P có {len(word2ph)} từ")
     if len(word_signals) != len(word2ph):
         print(f"\033[91m[CẢNH BÁO LỆCH PHA] BERT {len(word_signals)} != G2P {len(word2ph)} tại câu: {text[:50]}\033[0m")
-        # Sửa lỗi nhẹ nếu có ký tự lạ khiến tokenizer đếm sai
         final_word_signals = []
         for i in range(len(word2ph)):
-            idx = min(i, len(word_signals) - 1)
-            final_word_signals.append(word_signals[idx])
+            # Lấy vector BERT tương ứng với từ, nếu thiếu thì lấy cái cuối cùng
+            if i < len(word_signals):
+                final_word_signals.append(word_signals[i])
+            else:
+                final_word_signals.append(word_signals[-1] if len(word_signals) > 0 else torch.zeros_like(useful_res[0]))
     else:
-        print(f"\033[92m[OK] Đã khớp hoàn toàn!\033[0m") # In màu xanh cho dễ nhìn
+        print(f"\033[92m[OK] Đã khớp hoàn toàn!\033[0m")
         final_word_signals = word_signals
 
     phone_level_feature = []
