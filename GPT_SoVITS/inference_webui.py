@@ -44,6 +44,12 @@ logging.getLogger("multipart.multipart").setLevel(logging.ERROR)
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 version = model_version = os.environ.get("version", "v2")
+# --- THÊM ĐOẠN NÀY VÀO ---
+print("\n" + "="*50)
+print(f">>> [KIỂM TRA HỆ THỐNG] Phiên bản GPT-SoVITS: {version}")
+print(f">>> [KIỂM TRA THIẾT BỊ] Đang chạy trên: {os.environ.get('infer_device', 'cuda')}")
+print("="*50 + "\n")
+# -------------------------
 
 from config import change_choices, get_weights_names, name2gpt_path, name2sovits_path
 
